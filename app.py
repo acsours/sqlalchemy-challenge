@@ -38,11 +38,14 @@ app = Flask(__name__)
 @app.route('/')
 def home_page():
     return(
+        f'Welcome to the weather app!<br/>'
+        f'---------------------------<br/>'
         f'Available api routes:<br/>'
         f'/api/v1.0/precipitation<br/>'
-        f'/api/v1.0/station<br/>'
+        f'/api/v1.0/stations<br/>'
         f'/api/v1.0/tobs<br/>'
-        f'/api/v1.0/temp/<br/>'
+        f'/api/v1.0/temp/start_date<br/>'
+        f'/api/v1.0/temp/start_date/end_date<br/>'
     )
 
 
@@ -50,8 +53,6 @@ def home_page():
 @app.route('/api/v1.0/precipitation')
 def precipitation(): 
 
-    # return('This is the precipiation page')
-# Convert the query results to a dictionary using date as the key and prcp as the value.
     session = Session(engine)
     # Query 12 months of data
     year_ago=dt.date(2017, 8, 23) - dt.timedelta(days=365)
@@ -60,24 +61,13 @@ def precipitation():
 
     session.close()
 
+
+    # Convert the query results to a dictionary using date as the key and prcp as the value.
     prcp_dict = {}
-    for date, prcp in results:
+    for date, prcp in results:     
         prcp_dict[date] = prcp
-    
-    # one line: 
-    # precip = {date: prcp for date, prcp in precipitation}
 
-# List of dictionaries method
-    # all_measurements = []
-    # for date, prcp in results:
-    #     prcp_dict = {}
-    #     prcp_dict['date'] = date
-    #     prcp_dict['prcp'] = prcp
-    #     all_measurements.append(prcp_dict)
-    # convert list of tuples into normal lists
-    # year_prcp = list(np.ravel(results))
-
-# Return the JSON representation of your dictionary.
+    # Return the JSON representation of your dictionary.
     return jsonify(prcp_dict)
 
 
@@ -86,56 +76,39 @@ def stations():
 # Return a JSON list of stations from the dataset.
     session = Session(engine)
 
-    results=session.query(Station.station).all()
+    results=session.query(Station.id, Station.station).all()
 
     session.close()
 
-    all_stations=list(np.ravel(results))
-    return jsonify(stations=all_stations)
+    station_dict = {}
+    for station_id, station_name in results:     
+        station_dict[station_id] = station_name
 
-    # all_stations = []
-    # for each_station in results:
-    #     all_stations.append(each_station)
-
-    # return jsonify(all_stations)
-
-
-    # return('This is the stations page')
+    return jsonify(stations=station_dict)
 
 
 @app.route('/api/v1.0/tobs')
 def tobs():
-#     return('This is the tobs page')
 # # # Query the dates and temperature observations 
     session = Session(engine)
 
     year_ago=dt.date(2017, 8, 23) - dt.timedelta(days=365)
 
-    station_results=session.query(Measurement.tobs)\
+    station_results=session.query(Measurement.date, Measurement.tobs)\
                     .filter(Measurement.station=='USC00519281')\
                     .filter(Measurement.date >= year_ago).all()
 
     session.close()
-# # of the most active station for the last year of data.
-
-    station_measurements=list(np.ravel(station_results))
-    
-    return jsonify(temperature=station_measurements)
-
-    # active_stations = []
-    # for each_measurement in station_results:
-    #     active_stations.append(each_measurement)
-
-    # return jsonify(active_stations)
-        # active_station_dict = {}
-        # active_station_dict['']
 # # # Return a JSON list of temperature observations (TOBS) 
 # # for the previous year.
+    active_dict = {}
+    for date, tobs in station_results:     
+        active_dict[date] = tobs
+
+# Return the JSON representation of your dictionary.
+    return jsonify(USC00519281=active_dict)
 
 
-
-# @app.route
-# /api/v1.0/<start> and /api/v1.0/<start>/<end>
 
 # Return a JSON list of the minimum temperature, the average temperature, and the max temperature for a given start or start-end range.
 @app.route("/api/v1.0/temp/<start>")
@@ -143,32 +116,33 @@ def tobs():
 def stats(start=None, end=None):
     """Return TMIN, TAVG, TMAX."""
     session = Session(engine)
-    # Select statement
+    # Select statement to simplify query:
+    # calculate TMIN, TAVG, TMAX for dates to filter by later
     sel = [func.min(Measurement.tobs), func.avg(
         Measurement.tobs), func.max(Measurement.tobs)]
 
+    # if no end date is provided, only filter by start date
     if not end:
-        # calculate TMIN, TAVG, TMAX for dates greater than start
+        
         results = session.query(*sel).\
             filter(Measurement.date >= start).all()
-        # Unravel results into a 1D array and convert to a list
-        # temps = list(np.ravel(results))
-        # return jsonify(temps)
+
+    # if end and start date provided, filter by both
     else:
-    # calculate TMIN, TAVG, TMAX with start and stop
         results = session.query(*sel).\
         filter(Measurement.date >= start).\
         filter(Measurement.date <= end).all()
-    # Unravel results into a 1D array and convert to a list
-    
+
     session.close()
-    temps = list(np.ravel(results))
-    return jsonify(temps=temps)
 
 
-# When given the start only, calculate TMIN, TAVG, and TMAX for all dates greater than and equal to the start date.
+    temp_dict={}
+    for min, avg, max in results:
+        temp_dict['min']=min
+        temp_dict['avg']=avg
+        temp_dict['max']=max
 
-# When given the start and the end date, calculate the TMIN, TAVG, and TMAX for dates between the start and end date inclusive.
+    return jsonify(query_temps=temp_dict)
 
 
 if __name__=="__main__":
